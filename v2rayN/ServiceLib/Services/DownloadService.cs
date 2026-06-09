@@ -98,20 +98,20 @@ public class DownloadService
     /// <summary>
     /// Tries to download string content using proxy switch setting.
     /// </summary>
-    public async Task<string?> TryDownloadString(string url, bool blProxy, string userAgent)
+    public async Task<string?> TryDownloadString(string url, bool blProxy, string userAgent, string? customHeaders = null)
     {
         var webProxy = await GetWebProxy(blProxy);
-        return await TryDownloadString(url, webProxy, userAgent);
+        return await TryDownloadString(url, webProxy, userAgent, customHeaders);
     }
 
     /// <summary>
     /// Tries to download string content with a specified proxy.
     /// </summary>
-    public async Task<string?> TryDownloadString(string url, IWebProxy? webProxy, string userAgent)
+    public async Task<string?> TryDownloadString(string url, IWebProxy? webProxy, string userAgent, string? customHeaders = null)
     {
         try
         {
-            var result1 = await DownloadStringAsync(url, webProxy, userAgent, 15);
+            var result1 = await DownloadStringAsync(url, webProxy, userAgent, 15, customHeaders);
             if (result1.IsNotEmpty())
             {
                 return result1;
@@ -129,7 +129,7 @@ public class DownloadService
 
         try
         {
-            var result2 = await DownloadStringViaDownloader(url, webProxy, userAgent, 15);
+            var result2 = await DownloadStringViaDownloader(url, webProxy, userAgent, 15, customHeaders);
             if (result2.IsNotEmpty())
             {
                 return result2;
@@ -151,7 +151,7 @@ public class DownloadService
     /// <summary>
     /// Downloads string content via HttpClient.
     /// </summary>
-    private async Task<string?> DownloadStringAsync(string url, IWebProxy? webProxy, string userAgent, int timeout)
+    private async Task<string?> DownloadStringAsync(string url, IWebProxy? webProxy, string userAgent, int timeout, string? customHeaders = null)
     {
         try
         {
@@ -174,6 +174,24 @@ public class DownloadService
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Utils.Base64Encode(uri.UserInfo));
             }
 
+            // Custom Headers
+            if (customHeaders.IsNotEmpty())
+            {
+                foreach (var line in customHeaders!.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var idx = line.IndexOf(':');
+                    if (idx > 0)
+                    {
+                        var key = line[..idx].Trim();
+                        var val = line[(idx + 1)..].Trim();
+                        if (key.IsNotEmpty())
+                        {
+                            client.DefaultRequestHeaders.TryAddWithoutValidation(key, val);
+                        }
+                    }
+                }
+            }
+
             using var cts = new CancellationTokenSource();
             var result = await client.GetStringAsync(url, cts.Token).WaitAsync(TimeSpan.FromSeconds(timeout), cts.Token);
             return result;
@@ -193,7 +211,7 @@ public class DownloadService
     /// <summary>
     /// Downloads string content via DownloaderHelper.
     /// </summary>
-    private async Task<string?> DownloadStringViaDownloader(string url, IWebProxy? webProxy, string userAgent, int timeout)
+    private async Task<string?> DownloadStringViaDownloader(string url, IWebProxy? webProxy, string userAgent, int timeout, string? customHeaders = null)
     {
         try
         {
@@ -201,7 +219,7 @@ public class DownloadService
             {
                 userAgent = Utils.GetVersion(false);
             }
-            var result = await DownloaderHelper.Instance.DownloadStringAsync(webProxy, url, userAgent, timeout);
+            var result = await DownloaderHelper.Instance.DownloadStringAsync(webProxy, url, userAgent, timeout, customHeaders);
             return result;
         }
         catch (Exception ex)
